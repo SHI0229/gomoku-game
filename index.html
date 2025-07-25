@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Gomoku Game</title>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background: #f2f2f2;
+      text-align: center;
+      margin: 0;
+    }
+    h1 {
+      margin-top: 10px;
+    }
+    #menu {
+      margin: 10px;
+    }
+    #board-container {
+      display: flex;
+      justify-content: center;
+      margin: 10px;
+    }
+    #board {
+      display: grid;
+      background-color: #dcb87b;
+      border: 4px solid #444;
+    }
+    .cell {
+      width: 30px;
+      height: 30px;
+      box-sizing: border-box;
+      position: relative;
+      border-top: 1px solid #8b5a2b;
+      border-left: 1px solid #8b5a2b;
+    }
+    .black, .white {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      position: absolute;
+      top: 3px;
+      left: 3px;
+    }
+    .black {
+      background: black;
+    }
+    .white {
+      background: white;
+      border: 1px solid #aaa;
+    }
+    select, button {
+      padding: 8px 14px;
+      margin: 5px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+      background-color: #007acc;
+      color: white;
+      cursor: pointer;
+    }
+    #status {
+      font-weight: bold;
+      margin: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>🎯 Gomoku Game</h1>
+
+<div id="menu">
+  <label>モード:
+    <select id="mode">
+      <option value="ai">AI対戦</option>
+      <option value="2p">2人対戦</option>
+    </select>
+  </label>
+  <label>難易度:
+    <select id="difficulty">
+      <option value="easy">簡単</option>
+      <option value="hard" selected>難しい</option>
+    </select>
+  </label>
+  <label>盤面サイズ:
+    <select id="boardsize">
+      <option value="15" selected>15×15（五子棋）</option>
+      <option value="19">19×19（六子棋）</option>
+    </select>
+  </label>
+  <button onclick="startGame()">ゲーム開始</button>
+</div>
+
+<div id="status">設定を選んで開始してください。</div>
+<div id="board-container"><div id="board"></div></div>
+
+<script>
+  let size = 15;
+  let board = [];
+  let isOver = false;
+  let turn = 1;
+  let mode = 'ai';
+  let difficulty = 'hard';
+
+  const directions = [[1,0],[0,1],[1,1],[1,-1]];
+  const boardEl = document.getElementById('board');
+  const statusEl = document.getElementById('status');
+
+  function startGame() {
+    size = parseInt(document.getElementById('boardsize').value);
+    mode = document.getElementById('mode').value;
+    difficulty = document.getElementById('difficulty').value;
+    boardEl.style.gridTemplateColumns = `repeat(${size}, 30px)`;
+    boardEl.style.gridTemplateRows = `repeat(${size}, 30px)`;
+    board = [];
+    boardEl.innerHTML = '';
+    isOver = false;
+    turn = 1;
+    statusEl.textContent = mode === '2p' ? '黒の番です' : 'あなたは黒です。先に打ってください。';
+
+    for (let i = 0; i < size; i++) {
+      board[i] = [];
+      for (let j = 0; j < size; j++) {
+        board[i][j] = 0;
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.row = i;
+        cell.dataset.col = j;
+
+        // ✅ 边缘格子增加右边框和下边框
+        if (j === size - 1) cell.style.borderRight = '1px solid #8b5a2b';
+        if (i === size - 1) cell.style.borderBottom = '1px solid #8b5a2b';
+
+        cell.addEventListener('click', onMove);
+        boardEl.appendChild(cell);
+      }
+    }
+  }
+
+  function onMove(e) {
+    if (isOver) return;
+    const r = +e.target.dataset.row;
+    const c = +e.target.dataset.col;
+    if (board[r][c] !== 0) return;
+
+    if (mode === '2p') {
+      placeStone(r, c, turn);
+      if (checkWin(r, c, turn)) {
+        statusEl.textContent = (turn === 1 ? '黒' : '白') + 'の勝ち！🎉';
+        isOver = true;
+      } else {
+        turn = 3 - turn;
+        statusEl.textContent = (turn === 1 ? '黒' : '白') + 'の番です';
+      }
+    } else {
+      placeStone(r, c, 1);
+      if (checkWin(r, c, 1)) {
+        statusEl.textContent = '🎉 勝利！あなたの勝ち！';
+        isOver = true;
+        return;
+      }
+      setTimeout(aiMove, 300);
+    }
+  }
+
+  function aiMove() {
+    if (isOver) return;
+    const [r, c] = difficulty === 'easy' ? randomMove() : findBestMove();
+    placeStone(r, c, 2);
+    if (checkWin(r, c, 2)) {
+      statusEl.textContent = '😢 AIの勝ち。';
+      isOver = true;
+    }
+  }
+
+  function placeStone(r, c, type) {
+    board[r][c] = type;
+    const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+    const stone = document.createElement('div');
+    stone.className = type === 1 ? 'black' : 'white';
+    cell.appendChild(stone);
+  }
+
+  function checkWin(r, c, type) {
+    for (const [dx, dy] of directions) {
+      let count = 1;
+      for (let i = 1; i < 6; i++) {
+        const nr = r + dx*i, nc = c + dy*i;
+        if (nr < 0 || nc < 0 || nr >= size || nc >= size) break;
+        if (board[nr][nc] === type) count++; else break;
+      }
+      for (let i = 1; i < 6; i++) {
+        const nr = r - dx*i, nc = c - dy*i;
+        if (nr < 0 || nc < 0 || nr >= size || nc >= size) break;
+        if (board[nr][nc] === type) count++; else break;
+      }
+      if (count >= 5) return true;
+    }
+    return false;
+  }
+
+  function randomMove() {
+    const empty = [];
+    for (let i = 0; i < size; i++)
+      for (let j = 0; j < size; j++)
+        if (board[i][j] === 0) empty.push([i,j]);
+    return empty[Math.floor(Math.random() * empty.length)];
+  }
+
+  function scoreLine(cnt, open) {
+    if (cnt >= 5) return 99999;
+    if (cnt === 4 && open === 2) return 10000;
+    if (cnt === 4 && open === 1) return 1000;
+    if (cnt === 3 && open === 2) return 300;
+    if (cnt === 3 && open === 1) return 50;
+    if (cnt === 2 && open === 2) return 20;
+    return 1;
+  }
+
+  function evaluate(r, c, t) {
+    let score = 0;
+    for (const [dx, dy] of directions) {
+      let cnt = 1, open = 0;
+      for (let i = 1; i < 5; i++) {
+        const nr = r + dx*i, nc = c + dy*i;
+        if (nr < 0 || nc < 0 || nr >= size || nc >= size) break;
+        if (board[nr][nc] === t) cnt++;
+        else if (board[nr][nc] === 0) { open++; break; } else break;
+      }
+      for (let i = 1; i < 5; i++) {
+        const nr = r - dx*i, nc = c - dy*i;
+        if (nr < 0 || nc < 0 || nr >= size || nc >= size) break;
+        if (board[nr][nc] === t) cnt++;
+        else if (board[nr][nc] === 0) { open++; break; } else break;
+      }
+      score += scoreLine(cnt, open);
+    }
+    return score;
+  }
+
+  function findBestMove() {
+    let max = -1, best = [Math.floor(size/2), Math.floor(size/2)];
+    for (let i = 0; i < size; i++) {
+      for (let j = 0; j < size; j++) {
+        if (board[i][j] !== 0) continue;
+        const score = evaluate(i,j,2) + 0.8*evaluate(i,j,1);
+        if (score > max) {
+          max = score;
+          best = [i,j];
+        }
+      }
+    }
+    return best;
+  }
+
+</script>
+
+</body>
+</html>
